@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import "./App.css";
 
 interface Todo {
   id: number;
-  text: string;
+  task: string;
+  completed: number;
 }
 
 const App: React.FC = () => {
@@ -11,36 +12,82 @@ const App: React.FC = () => {
   const [input, setInput] = useState<string>("");
   const [editId, setEditId] = useState<number | null>(null);
 
+  // Fetch todos from the backend
+  useEffect(() => {
+    fetch("http://localhost:8080/api/todos")
+      .then((response) => response.json())
+      .then((data) => setTodos(data))
+      .catch((err) => console.error("Error fetching todos:", err));
+  }, []);
+
+  // Add or edit a todo
   const handleAddTodo = () => {
     if (input.trim() === "") return;
 
     if (editId !== null) {
-      // 編集モード
-      setTodos((prevTodos) =>
-        prevTodos.map((todo) =>
-          todo.id === editId ? { ...todo, text: input } : todo
-        )
-      );
-      setEditId(null);
+      // Update existing todo
+      const updatedTodo = { id: editId, task: input, completed: 0 };
+
+      fetch("http://localhost:8080/api/todos", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(updatedTodo),
+      })
+        .then((response) => response.json())
+        .then((updated) => {
+          setTodos((prevTodos) =>
+            prevTodos.map((todo) =>
+              todo.id === updated.id ? { ...todo, task: updated.task } : todo
+            )
+          );
+          setEditId(null);
+          setInput("");
+        })
+        .catch((err) => console.error("Error updating todo:", err));
     } else {
-      // 新規作成
-      setTodos([...todos, { id: Date.now(), text: input }]);
+      // Create new todo
+      const newTodo = { task: input, completed: 0 };
+
+      fetch("http://localhost:8080/api/todos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(newTodo),
+      })
+        .then((response) => response.json())
+        .then((created) => {
+          setTodos((prevTodos) => [...prevTodos, created]);
+          setInput("");
+        })
+        .catch((err) => console.error("Error creating todo:", err));
     }
-    setInput("");
   };
 
+  // Delete a todo
   const handleDeleteTodo = (id: number) => {
-    setTodos((prevTodos) => prevTodos.filter((todo) => todo.id !== id));
+    fetch(`http://localhost:8080/api/todos/${id}`, {
+      method: "DELETE",
+    })
+      .then(() => {
+        setTodos((prevTodos) => prevTodos.filter((todo) => todo.id !== id));
+      })
+      .catch((err) => console.error("Error deleting todo:", err));
   };
 
-  const handleEditTodo = (id: number, text: string) => {
+  // Prepare to edit a todo
+  const handleEditTodo = (id: number, task: string) => {
     setEditId(id);
-    setInput(text);
+    setInput(task);
   };
+
+  console.log(todos)
 
   return (
     <div className="App">
-      <h1>React Todo App</h1>
+      <h1>Todo App</h1>
       <div className="todo-input">
         <input
           type="text"
@@ -56,8 +103,8 @@ const App: React.FC = () => {
         <ul className="todo-list">
           {todos.map((todo) => (
             <li key={todo.id}>
-              <span>{todo.text}</span>
-              <button onClick={() => handleEditTodo(todo.id, todo.text)}>
+              <span>{todo.task}</span>
+              <button onClick={() => handleEditTodo(todo.id, todo.task)}>
                 Edit
               </button>
               <button onClick={() => handleDeleteTodo(todo.id)}>Delete</button>
