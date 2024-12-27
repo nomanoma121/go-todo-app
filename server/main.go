@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -21,6 +22,7 @@ const (
 	selectTodos = "SELECT * FROM todos"
 	insertTodo = "INSERT INTO todos (task, completed) VALUES (?, ?)"
 	editTodoById = "UPDATE todos SET task = ?, completed = ? WHERE id = ?"
+	deleteTodoById = "DELETE FROM todos WHERE id = ?"
 )
 
 type Todo struct {
@@ -54,7 +56,7 @@ func main() {
 
 	//動的ルーティング
 	http.HandleFunc("/api/todos/", HandleCORS(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
+		if r.Method == http.MethodDelete {
 			deleteTodos(w, r, db)
 		} else {
 			w.WriteHeader(http.StatusMethodNotAllowed)
@@ -67,6 +69,8 @@ func main() {
 			getTodos(w, r, db)
 		case http.MethodPost:
 			createTodos(w, r, db)
+		case http.MethodPut:
+			editTodos(w, r, db)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
@@ -135,7 +139,22 @@ func editTodos(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 }
 
 func deleteTodos(w http.ResponseWriter, r *http.Request, db *sql.DB) {
-	
+	fmt.Println("this is running")
+	idStr := r.URL.Path[len("/api/todos/"):]
+	id, err := strconv.Atoi(idStr)
+
+	if err != nil {
+		respondJSON(w, http.StatusBadRequest, "Invalid ID")
+		return
+	}
+
+	_, err = db.Exec(deleteTodoById, id)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println("Successfully deleted.")
+	respondJSON(w, http.StatusOK, id)
 }
 
 func decodeBody(r *http.Request, v interface{}) error { 
@@ -159,6 +178,7 @@ func HandleCORS(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE")
 
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
