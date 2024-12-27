@@ -20,7 +20,7 @@ const (
 	`
 	selectTodos = "SELECT * FROM todos"
 	insertTodo = "INSERT INTO todos (task, completed) VALUES (?, ?)"
-	editTodo = "UPDATE todos SET task = ?, completed = ? WHERE id = ?"
+	editTodoById = "UPDATE todos SET task = ?, completed = ? WHERE id = ?"
 )
 
 type Todo struct {
@@ -52,16 +52,21 @@ func main() {
 
 	defer db.Close()
 
+	//動的ルーティング
+	http.HandleFunc("/api/todos/", HandleCORS(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			deleteTodos(w, r, db)
+		} else {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}
+	}))
+	//静的ルーティング
 	http.HandleFunc("/api/todos", HandleCORS(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			getTodos(w, r, db)
 		case http.MethodPost:
 			createTodos(w, r, db)
-		case http.MethodPut:
-			editTodos(w, r, db)
-		case http.MethodDelete:
-			deleteTodos(w, r, db)
 		default:
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
@@ -115,7 +120,18 @@ func createTodos(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 }
 
 func editTodos(w http.ResponseWriter, r *http.Request, db *sql.DB) {
+	var todo Todo
+	if err := decodeBody(r, &todo); err != nil {
+		respondJSON(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
+	fmt.Println(todo.ID, todo.Task, todo.Completed)
+	_, err := db.Exec(editTodoById, todo.Task, todo.Completed, todo.ID)
+	if err != nil {
+		panic(err)
+	}
+	respondJSON(w, http.StatusOK, todo)
 }
 
 func deleteTodos(w http.ResponseWriter, r *http.Request, db *sql.DB) {
