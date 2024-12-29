@@ -6,37 +6,49 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/go-sql-driver/mysql"
 )
 
 const (
-	dbFileName = "db.sqlite3"
+	// username:password@(tcpname)(host:port)/dbname
+	DSN         = "test:test@(db:3306)/test"
 	createTable = `
 		CREATE TABLE IF NOT EXISTS todos (
-			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			id INTEGER PRIMARY KEY AUTO_INCREMENT,
 			task TEXT NOT NULL,
 			completed INTEGER NOT NULL
 		)
 	`
-	selectTodos = "SELECT * FROM todos"
-	insertTodo = "INSERT INTO todos (task, completed) VALUES (?, ?)"
-	editTodoById = "UPDATE todos SET task = ?, completed = ? WHERE id = ?"
+	selectTodos    = "SELECT * FROM todos"
+	insertTodo     = "INSERT INTO todos (task, completed) VALUES (?, ?)"
+	editTodoById   = "UPDATE todos SET task = ?, completed = ? WHERE id = ?"
 	deleteTodoById = "DELETE FROM todos WHERE id = ?"
 )
 
 type Todo struct {
-	ID int `json:"id"`
-	Task string `json:"task"`
-	Completed int `json:"completed"`
+	ID        int    `json:"id"`
+	Task      string `json:"task"`
+	Completed int    `json:"completed"`
 }
 
 func init() {
-	db, err := sql.Open("sqlite3", dbFileName)
+	db, err := sql.Open("mysql", DSN)
+	// データベースに接続できない場合、5秒ごとに再接続を試みる
 	if err != nil {
-		panic(err)
+		fmt.Println("データベースに接続できませんでした")
 	}
 	defer db.Close()
+	for {
+		err := db.Ping()
+		if err != nil {
+			fmt.Println("データベースに接続できませんでした。再接続を試みます。")
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		break
+	}
 
 	_, err = db.Exec(createTable)
 	if err != nil {
@@ -47,12 +59,20 @@ func init() {
 }
 
 func main() {
-	db, err := sql.Open("sqlite3", dbFileName)
+	db, err := sql.Open("mysql", DSN)
 	if err != nil {
-		panic(err)
+		fmt.Println("データベースに接続できませんでした")
 	}
-
 	defer db.Close()
+	for {
+		err := db.Ping()
+		if err != nil {
+			fmt.Println("データベースに接続できませんでした。再接続を試みます。")
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		break
+	}
 
 	//動的ルーティング
 	http.HandleFunc("/api/todos/", HandleCORS(func(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +95,7 @@ func main() {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 		}
 	}))
-	
+
 	fmt.Println("http://localhost:8080でサーバーを起動します")
 	http.ListenAndServe(":8080", nil)
 }
@@ -88,7 +108,7 @@ func getTodos(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	defer rows.Close()
 
 	var todos = []Todo{}
-	
+
 	for rows.Next() {
 		var todo Todo
 		err := rows.Scan(&todo.ID, &todo.Task, &todo.Completed)
@@ -105,7 +125,7 @@ func createTodos(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	var todo Todo
 	if err := decodeBody(r, &todo); err != nil {
 		respondJSON(w, http.StatusBadRequest, err.Error())
-		return 
+		return
 	}
 	fmt.Println(todo.Task, todo.Completed)
 	result, err := db.Exec(insertTodo, todo.Task, todo.Completed)
@@ -118,7 +138,7 @@ func createTodos(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 		panic(err)
 	}
 	todo.ID = int(id)
-	
+
 	fmt.Println("Successfully Created!")
 	respondJSON(w, http.StatusCreated, todo)
 }
@@ -157,7 +177,7 @@ func deleteTodos(w http.ResponseWriter, r *http.Request, db *sql.DB) {
 	respondJSON(w, http.StatusOK, id)
 }
 
-func decodeBody(r *http.Request, v interface{}) error { 
+func decodeBody(r *http.Request, v interface{}) error {
 	defer r.Body.Close()
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
 		return err

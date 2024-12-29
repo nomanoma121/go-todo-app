@@ -8,3 +8,12 @@ services:
     build: ./client
     ports:
       - "80:4173"
+  db:
+    image: "mysql:8.4"
+    environment:
+      MYSQL_ROOT_PASSWORD: "root"
+      MYSQL_DATABASE: "test"
+      MYSQL_USER: "test"
+      MYSQL_PASSWORD: "test"
+    ports:
+      - "3306:3306"
