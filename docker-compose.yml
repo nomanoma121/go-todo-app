@@ -17,3 +17,6 @@ services:
       MYSQL_PASSWORD: "test"
     ports:
       - "3306:3306"
+    volumes:
+      - ./db:/var/lib/mysql
+
